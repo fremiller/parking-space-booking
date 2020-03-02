@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parking Booking</title>
+
+  <!-- update the version number as needed -->
+  <script defer src="/__/firebase/7.5.0/firebase-app.js"></script>
+  <!-- include only the Firebase features as you need -->
+  <script defer src="/__/firebase/7.5.0/firebase-auth.js"></script>
+  <script defer src="/__/firebase/7.5.0/firebase-database.js"></script>
+  <script defer src="/__/firebase/7.5.0/firebase-messaging.js"></script>
+  <script defer src="/__/firebase/7.5.0/firebase-storage.js"></script>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.firebase.com/libs/firebaseui/3.5.2/firebaseui.js"></script>
+  <link type="text/css" rel="stylesheet" href="https://cdn.firebase.com/libs/firebaseui/3.5.2/firebaseui.css" />
+  <!-- initialize the SDK after all desired features are loaded -->
+  <script defer src="/__/firebase/init.js"></script>
+  
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+  <script src="/client.js"></script>
+</head>
+
+<body>
+  <style>
+    .page {
+      display: none;
+    }
+  </style>
+  <div class="page" id="enterLocation">
+    <h1>Enter Location</h1>
+    <h3 id="message"></h3>
+      <!-- <input name="starting time" type="int" maxlength="50" placeholder="location" aria-labelledby="select-time"
+        id="parkLocation" /> -->
+      <!-- <button type="select" id="select-time">Enter Parking Lot</button> -->
+      <select id="location">
+
+      </select>
+      <button onclick="loadCurrentLocation()">Select</button>
+    
+  </div>
+
+
+  <div class="page" id="selectTime">
+
+    <h1>Book Parking Space</h1>
+    <h3 id="carparkname">Test Car Park</h3>
+    <h3><span id="spacesLeft"></span> spaces left</h3>
+    <div class="timeInput">
+      <h1>Select Time</h1>
+      <p>Please select the time you would like your booking to start from:</p>
+
+      <select required id="time">
+  
+      </select>
+
+      <script>
+        function displayResInfo(/*assigned space, reserved time, etc.*/) {
+          var timeID = 0;
+          var parkSpaceID = 0;
+          document.getElementById("parkingSpaceID").innerHTML = parkSpaceID;
+          document.getElementById("pokemon").innerHTML = result;
+        }
+
+        function GetSelectedValue() {
+          var e = document.getElementById("time"); //List of all options??
+          var result = e.options[e.selectedIndex].value; // Option we need
+          document.getElementById("result").innerHTML = result;
+        }
+      </script>
+
+      <br />
+      <br />
+      <button type="button" onclick="BookWithSelectedValues()">
+        Book Time
+      </button>
+    </div>
+
+  </div>
+  <div class="page" id="bookinginfo">
+    <h1>
+      <p>
+        Booking Info Display
+        <p id="time">your booking</p>
+        <p id="park">your car park</p>
+        You will be texted the location 10 minutes before your booking begins.
+      </p>
+    </h1>
+  </div>
+
+  <div class="page" id="login">
+    <div id="firebaseui-auth-container"></div>
+  </div>
+
+  <div class="page" id="loading">
+    <h1>Loading</h1>
+  </div>
+  <p id="load">Loading</p>
+
+  <script>
+    function populateDropdown(dropdownSelector, data) {
+      let innerHTML = "";
+      data.forEach((d) => {
+        innerHTML += `<option id=${d.id}>${d.text}</option>`
+      })
+      $(dropdownSelector).html(innerHTML)
+    }
+
+    function BookWithSelectedValues(){
+      let time = $("#selectTime #time").children(":selected").attr("id");
+      displayPage("loading")
+      $.ajax(FUNCTIONS_BASE_URL + `MakeBooking?TimeStart=${time}&Duration=${3600*2}&User=${PHONE_NUMBER}&CarPark=${SELECTED_CAR_PARK}`, {
+        success: (data)=>{
+          displayPage("bookinginfo")
+        }
+      })
+    }
+    let SELECTED_CAR_PARK = "";
+    function loadCurrentLocation() {
+      let locationId = $("#location").children(":selected").attr("id");
+      let locationName = $("#location").val();
+      SELECTED_CAR_PARK = locationId;
+      displayPage("loading");
+      $.ajax(FUNCTIONS_BASE_URL + "CarParkFull?carpark=" + locationId, {
+        success: (data) => {
+          console.log(data);
+          $("#selectTime #carparkname").text(locationName);
+          $("#selectTime #spacesLeft").text(data.data.spaces);
+          let timeHTMLl = "";
+          let currentTimeSeconds = Math.floor(new Date().getTime() / 1000);
+          for(let i = currentTimeSeconds; i < currentTimeSeconds + 2 * 3600; i += 60 * 5){
+            let newTime = new Date(i * 1000);
+            timeHTMLl = timeHTMLl + "<option id=\""+i+"\">"+newTime.getHours()+":"+(newTime.getMinutes() < 10 ? "0" + newTime.getMinutes() : newTime.getMinutes()) +"</option>";
+          }
+          console.log(timeHTMLl)
+          document.getElementById("time").innerHTML = timeHTMLl;
+          if(data.data.full){
+            $("#enterLocation #message").text(locationName + " has no spaces left.")
+            displayPage("enterLocation")
+          }
+          else{
+            displayPage("selectTime");
+          }
+        }
+      });
+    }
+
+    let FUNCTIONS_BASE_URL = "https://us-central1-parking-space-booking.cloudfunctions.net/";
+    let PHONE_NUMBER = "";
+    document.addEventListener('DOMContentLoaded', function () {
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).then(()=>{
+
+      })
+      try {
+        let app = firebase.app();
+        let features = ['auth', 'database', 'messaging', 'storage'].filter(feature => typeof app[feature] === 'function');
+        document.getElementById('load').innerHTML = ``;
+        var ui = new firebaseui.auth.AuthUI(firebase.auth());
+        ui.start('#firebaseui-auth-container', {
+          signInOptions: [
+            // List of OAuth providers supported.
+            // firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+            firebase.auth.PhoneAuthProvider.PROVIDER_ID
+          ],
+          signInFlow: 'popup',
+          defaultCountry: 'GB',
+          callbacks: {
+            signInSuccessWithAuthResult: function (authResult, redirectUrl) {
+              // User successfully signed in.
+              // Display loading page
+              console.log(authResult)
+              PHONE_NUMBER = authResult.user.phoneNumber;
+              displayPage("loading")
+              // Download all locations
+              $.ajax(FUNCTIONS_BASE_URL + "GetCarParkList", {
+                success: (data) => {
+                  // Display page1
+                  console.log(data);
+                 
+                  var dropdownData = data.data.map((carpark) => {
+                    console.log(carpark)
+                    return {
+                      text: carpark.name,
+                      id: carpark.id
+                    }
+                  })
+                  console.log(dropdownData)
+                  populateDropdown("#location", dropdownData)
+                  displayPage("enterLocation")
+                }
+              })
+              return false;
+            }
+          }
+          // Other config options...
+        });
+      } catch (e) {
+        console.error(e);
+        document.getElementById('load').innerHTML = '';
+      }
+    });
+
+    function displayPage(pageid) {
+          $(".page").hide()
+          $("#" + pageid).show()
+        }
+
+        $(() => {
+          displayPage("login")
+        })
+  </script>
+</body>
+
+</html>
